@@ -15,10 +15,53 @@ Server/MagicStreamServer/bin/
 .DS_Store
 .vscode/
 
-# Environment files
+# Environment files (CONTAINS SECRETS - DO NOT COMMIT)
 Client/magic-stream-client/.env
+Client/magic-stream-client/.env.local
+Client/magic-stream-client/.env.*.local
 Server/MagicStreamServer/.env
+Server/MagicStreamServer/.env.local
 .env
+.env.local
+.env.*.local
 *.env
+
+# Terraform secrets and state (CONTAINS SECRETS - DO NOT COMMIT)
+# terraform variables with secrets (but keep example.tfvars as template)
+*.tfvars
+*.tfvars.json
+!example.tfvars
+!**/example.tfvars
+
+# Terraform state files (can contain sensitive data)
+terraform.tfstate
+terraform.tfstate.*
+terraform.tfstate.backup
+*.tfstate
+*.tfstate.*
+
+# Terraform cache and working directories
+.terraform/
+.terraform.lock.hcl
+.terraformrc
+
+# IDE and editor files
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local testing and temporary files
+local/
+tmp/
+temp/
+*.log
+debug.log
+
+# Kubernetes local config (if any)
+kubeconfig
+kubeconfig.yaml
 
 

@@ -24,18 +24,20 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
-          env:
-            - name: MONGODB_URI
-              value: "mongodb+srv://GavinL:Password1@magic-stream-movies.7qnqryr.mongodb.net/?appName=Magic-Stream-Movies"
+          envFrom:
+            - configMapRef:
+                name: magic-stream-api-config
+            - secretRef:
+                name: magic-stream-api-secrets
           livenessProbe:
             httpGet:
-              path: /health
+              path: /hello
               port: 8080
             initialDelaySeconds: 30
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /ready
+              path: /hello
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 5

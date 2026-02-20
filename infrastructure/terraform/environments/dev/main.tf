@@ -48,3 +48,39 @@ module "eks" {
   instance_types = ["t3.small"] # Better resource allocation for EKS
   tags           = var.tags
 }
+
+# Kubernetes ConfigMap for non-sensitive app config
+resource "kubernetes_config_map" "magic_stream_config" {
+  depends_on = [module.eks]
+
+  metadata {
+    name      = "magic-stream-api-config"
+    namespace = "default"
+  }
+
+  data = {
+    PORT                    = "8080"
+    DATABASE_NAME           = "magic-stream-movies"
+    RECOMMENDED_MOVIE_LIMIT = "5"
+    ALLOWED_ORIGINS         = var.allowed_origins
+  }
+}
+
+# Kubernetes Secret for sensitive app secrets
+resource "kubernetes_secret" "magic_stream_secrets" {
+  depends_on = [module.eks]
+
+  metadata {
+    name      = "magic-stream-api-secrets"
+    namespace = "default"
+  }
+
+  type = "Opaque"
+
+  data = {
+    OPENAI_API_KEY           = var.openai_api_key
+    MONGODB_URI              = var.mongodb_uri
+    SECRET_KEY               = var.secret_key
+    REFRESH_TOKEN_SECRET_KEY = var.refresh_token_secret_key
+  }
+}

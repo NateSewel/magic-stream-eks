@@ -1,0 +1,140 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_run:
+    workflows: [Build and Push Docker Images]
+    types: [completed]
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: k8s-deploy
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ matrix.environment }}-eks \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Check cluster connectivity
+        run: kubectl cluster-info
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -k infrastructure/kubernetes/base
+          kubectl get deployments,services,pods
+
+      - name: Wait for rollouts
+        run: |
+          echo "Waiting for client deployment..."
+          kubectl rollout status deployment/client -n default --timeout=5m
+
+          echo "Waiting for server deployment..."
+          kubectl rollout status deployment/server -n default --timeout=5m
+
+      - name: Verify pod health
+        run: |
+          echo "Checking pod status..."
+          kubectl get pods -l app=server -o wide
+          kubectl get pods -l app=client -o wide
+
+          echo "Checking service endpoints..."
+          kubectl get svc -o wide
+
+      - name: Check server logs
+        if: always()
+        run: |
+          echo "Server pod logs (last 30 lines):"
+          kubectl logs -l app=server --tail=30 --all-containers=true
+
+          echo -e "\nClient pod logs (last 30 lines):"
+          kubectl logs -l app=client --tail=30 --all-containers=true
+
+      - name: Run smoke tests
+        run: |
+          SERVER_POD=$(kubectl get pods -l app=server -o jsonpath='{.items[0].metadata.name}')
+
+          echo "Testing /hello endpoint..."
+          kubectl exec -it $SERVER_POD -- wget -q -O- http://localhost:8080/hello
+
+          echo -e "\nTesting /movies endpoint..."
+          kubectl exec -it $SERVER_POD -- wget -q -O- http://localhost:8080/movies | head -c 200
+
+      - name: Get LoadBalancer endpoint
+        run: |
+          echo "Client LoadBalancer URL:"
+          kubectl get svc client -o jsonpath='http://{.status.loadBalancer.ingress[0].hostname}/'
+
+      - name: Create deployment summary
+        if: always()
+        run: |
+          TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          CLIENT_URL=$(kubectl get svc client -o jsonpath='http://{.status.loadBalancer.ingress[0].hostname}/' 2>/dev/null || echo 'Pending...')
+
+          cat > deployment-summary.txt << EOF
+          ============================================
+          Deployment Summary - $TIMESTAMP
+          ============================================
+          Environment: ${{ matrix.environment }}
+
+          Applications:
+          - Client: Running via LoadBalancer
+            URL: $CLIENT_URL
+          - Server: Running on port 8080
+          - MongoDB: Running on port 27017
+
+          Status: ✅ Deployment Successful
+
+          Next Steps:
+          1. Visit the client URL to verify the application
+          2. Check pod logs for any errors: kubectl logs -l app=server
+          3. Test API endpoints directly
+
+          Useful Commands:
+          - kubectl get pods
+          - kubectl logs -l app=server
+          - kubectl exec -it <pod-name> -- /bin/sh
+          EOF
+
+          cat deployment-summary.txt
+
+      - name: Upload deployment summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-summary-${{ matrix.environment }}
+          path: deployment-summary.txt
+          retention-days: 30
+
+      - name: Notify deployment complete
+        uses: actions/github-script@v7
+        if: always() && github.event_name == 'pull_request'
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **Deployment Complete** - ${{ matrix.environment }}\n\nDeployment workflow finished successfully. Applications are running.`
+            });

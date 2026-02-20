@@ -46,3 +46,37 @@ variable "tags" {
     Environment = "dev"
   }
 }
+
+variable "openai_api_key" {
+  type        = string
+  sensitive   = true
+  description = "OpenAI API key for movie review sentiment analysis"
+  default     = ""
+}
+
+variable "mongodb_uri" {
+  type        = string
+  sensitive   = true
+  description = "MongoDB connection URI"
+  default     = ""
+}
+
+variable "secret_key" {
+  type        = string
+  sensitive   = true
+  description = "JWT secret key"
+  default     = "dev-secret-key-change-in-prod"
+}
+
+variable "refresh_token_secret_key" {
+  type        = string
+  sensitive   = true
+  description = "JWT refresh token secret key"
+  default     = "dev-refresh-secret-key-change-in-prod"
+}
+
+variable "allowed_origins" {
+  type        = string
+  description = "CORS allowed origins (comma-separated)"
+  default     = "*"
+}
